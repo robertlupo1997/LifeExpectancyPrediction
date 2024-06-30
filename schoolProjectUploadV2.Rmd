@@ -1,0 +1,252 @@
+---
+title: "schoolProjectUploadV2"
+author: "Robert Lupo"
+date: "2024-06-30"
+output: word_document
+---
+
+```{r}
+# Confirm the current working directory
+print(getwd())
+
+# Load the male life tables using the full path
+male_life_tables <- read.table("C:/Users/treyl/OneDrive/Documents/School/School/2023/Fall 2023/Computational Methods for Applied Statistics-STA4102-001/Project/DATA/lt_male/mltper_1x1/USA.mltper_1x1.txt", header = TRUE, skip = 2)
+
+# Load the female life tables using the full path
+female_life_tables <- read.table("C:/Users/treyl/OneDrive/Documents/School/School/2023/Fall 2023/Computational Methods for Applied Statistics-STA4102-001/Project/DATA/lt_female/fltper_1x1/USA.fltper_1x1.txt", header = TRUE, skip = 2)
+
+# Check the first few rows of the loaded data
+head(male_life_tables)
+head(female_life_tables)
+
+# Part A) Picked Human Mortality Database
+# Problem Statement: Develop models to predict life expectancy for males and females based on their age and sex
+
+# Part B) Data Cleaning and Wrangling
+
+male_life_tables$Gender <- 0  # Add Gender column for males (assign 0)
+
+female_life_tables$Gender <- 1  # Add Gender column for females (assign 1)
+
+# Combine male and female life tables
+combined_life_tables <- rbind(male_life_tables, female_life_tables)
+
+# Convert Age to numeric (remove 'm' or 'f' prefix)
+combined_life_tables$Age <- as.numeric(gsub("[^0-9]", "", combined_life_tables$Age))
+
+# Check the structure of the updated data frame
+str(combined_life_tables)
+
+# Select relevant columns
+relevant_columns <- combined_life_tables[c("Gender", "Age", "ex")]
+
+# Check the structure of the relevant data frame
+str(relevant_columns)
+
+# Check for missing values
+missing_values <- sum(is.na(relevant_columns))
+cols_with_missing <- colnames(relevant_columns)[colSums(is.na(relevant_columns)) > 0]
+
+# Check for duplicates after combining male and female life tables
+duplicates_after_combination <- combined_life_tables[duplicated(combined_life_tables), ]
+
+if (nrow(duplicates_after_combination) > 0) {
+  print("Duplicate Rows After Combining Male and Female Life Tables:")
+  print(duplicates_after_combination)
+} else {
+  print("No duplicate rows found after combining male and female life tables.")
+}
+
+# Part C) Exploratory Data Analysis (EDA)
+# Part 1) Summary Statistics
+summary(relevant_columns)
+
+# Part 2) Visualizations
+if (!requireNamespace("ggplot2", quietly = TRUE)) {
+  install.packages("ggplot2")
+}
+library(ggplot2)
+
+ggplot_data <- data.frame(Gender = factor(relevant_columns$Gender),
+                          LifeExpectancy = relevant_columns$ex)
+
+# Create a side-by-side histogram using ggplot2
+ggplot(ggplot_data, aes(x = LifeExpectancy, fill = Gender)) +
+  geom_histogram(position = "dodge", bins = 20, color = "black", alpha = 0.7) +
+  labs(title = "Life Expectancy by Gender",
+       x = "Life Expectancy",
+       y = "Frequency") +
+  scale_fill_manual(values = c("blue", "pink")) +
+  theme_minimal()
+
+# Boxplot of Life Expectancy by Gender
+boxplot(ex ~ Gender, data = relevant_columns, main = "Boxplot of Life Expectancy by Gender", xlab = "Gender", ylab = "Life Expectancy")
+
+# Scatterplot of Age vs Life Expectancy
+plot(relevant_columns$Age, relevant_columns$ex, main = "Scatterplot of Age vs Life Expectancy", xlab = "Age", ylab = "Life Expectancy")
+
+# Part 3) Identify Relationships or Trends
+# Correlation Matrix
+correlation_matrix <- cor(relevant_columns)
+print(correlation_matrix)
+
+# Linear Model: Life Expectancy ~ Age + Gender
+linear_model <- lm(ex ~ Age + Gender, data = relevant_columns)
+summary(linear_model)
+
+# Extract R-squared and MSE for Linear Model
+r_squared <- summary(linear_model)$r.squared
+mse <- mean(linear_model$residuals^2)
+print(paste("Linear Regression R-squared:", r_squared))
+print(paste("Linear Regression MSE:", mse))
+
+# Visualize Residuals of Linear Model
+ggplot(data = relevant_columns, aes(x = Age, y = linear_model$residuals)) +
+  geom_point() +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  labs(title = "Residuals of Linear Model", x = "Age", y = "Residuals") +
+  theme_minimal()
+
+# Actual vs Predicted Values for Linear Model
+predicted_values <- predict(linear_model)
+ggplot(data = relevant_columns, aes(x = ex, y = predicted_values)) +
+  geom_point() +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
+  labs(title = "Actual vs Predicted Values (Linear Model)", x = "Actual Life Expectancy", y = "Predicted Life Expectancy") +
+  theme_minimal()
+
+# Part D) Statistical Analysis
+# Part 1) Hypothesis Testing
+t_test_result <- t.test(ex ~ Gender, data = relevant_columns)
+print(t_test_result)
+
+# Part 2) Correlation Analysis
+correlation_age_ex <- cor(relevant_columns$Age, relevant_columns$ex)
+print(paste("Correlation between Age and Life Expectancy:", correlation_age_ex))
+
+# Part 3) Linear Regression
+linear_model <- lm(ex ~ Age + Gender, data = relevant_columns)
+summary(linear_model)
+
+# Extract R-squared and MSE for Linear Model
+r_squared <- summary(linear_model)$r.squared
+mse <- mean(linear_model$residuals^2)
+print(paste("Linear Regression R-squared:", r_squared))
+print(paste("Linear Regression MSE:", mse))
+
+# Part 4) Advanced Technique: Ridge Regression
+library(glmnet)
+X <- model.matrix(ex ~ Age + Gender, data = relevant_columns)[, -1]
+y <- relevant_columns$ex
+
+ridge_model <- cv.glmnet(X, y, alpha = 0)  # alpha = 0 for ridge regression
+print(ridge_model)
+
+ridge_predictions <- predict(ridge_model, s = "lambda.min", newx = X)
+ridge_residuals <- y - ridge_predictions
+ridge_rmse <- sqrt(mean(ridge_residuals^2))
+ridge_r_squared <- cor(y, ridge_predictions)^2
+print(paste("Ridge Regression RMSE:", ridge_rmse))
+print(paste("Ridge Regression R-squared:", ridge_r_squared))
+
+# Visualize Residuals of Ridge Regression
+ggplot(data = relevant_columns, aes(x = Age, y = ridge_residuals)) +
+  geom_point() +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  labs(title = "Residuals of Ridge Regression", x = "Age", y = "Residuals") +
+  theme_minimal()
+
+# Actual vs Predicted Values for Ridge Regression
+ggplot(data = relevant_columns, aes(x = ex, y = ridge_predictions)) +
+  geom_point() +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
+  labs(title = "Actual vs Predicted Values (Ridge Regression)", x = "Actual Life Expectancy", y = "Predicted Life Expectancy") +
+  theme_minimal()
+
+# Install and load the caret package for data partitioning
+if (!requireNamespace("caret", quietly = TRUE)) {
+  install.packages("caret")
+}
+library(caret)
+
+# Split the data into training and testing sets
+set.seed(123)
+index <- createDataPartition(relevant_columns$ex, p = 0.8, list = FALSE)
+train_data <- relevant_columns[index, ]
+test_data <- relevant_columns[-index, ]
+
+# Fit the linear regression model on the training data
+linear_model <- lm(ex ~ Age + Gender, data = train_data)
+linear_predictions <- predict(linear_model, newdata = test_data)
+
+# Evaluate the performance of the linear regression model on the testing data
+linear_rmse <- sqrt(mean((test_data$ex - linear_predictions)^2))
+test_r_squared <- 1 - (sum((test_data$ex - linear_predictions)^2) / sum((test_data$ex - mean(test_data$ex))^2))
+test_mse <- mean((test_data$ex - linear_predictions)^2)
+print(paste("Linear Regression RMSE on Testing Data:", linear_rmse))
+print(paste("Linear Regression R-squared on Testing Data:", test_r_squared))
+print(paste("Linear Regression MSE on Testing Data:", test_mse))
+
+# Visualize Actual vs Predicted Values for Linear Model on Testing Data
+ggplot(data = test_data, aes(x = ex, y = linear_predictions)) +
+  geom_point() +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
+  labs(title = "Actual vs Predicted Values (Linear Model on Testing Data)", x = "Actual Life Expectancy", y = "Predicted Life Expectancy") +
+  theme_minimal()
+
+# Load required libraries
+library(rpart)
+library(randomForest)
+library(e1071)
+library(gbm)
+
+# Decision Trees
+tree_model <- rpart(ex ~ Age + Gender, data = train_data)
+tree_predictions <- predict(tree_model, newdata = test_data)
+tree_rmse <- sqrt(mean((test_data$ex - tree_predictions)^2))
+tree_r_squared <- cor(test_data$ex, tree_predictions)^2
+print(paste("Decision Tree RMSE on Testing Data:", tree_rmse))
+print(paste("Decision Tree R-squared on Testing Data:", tree_r_squared))
+
+# Visualize Residuals of Decision Tree
+ggplot(data = test_data, aes(x = Age, y = test_data$ex - tree_predictions)) +
+  geom_point() +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  labs(title = "Residuals of Decision Tree", x = "Age", y = "Residuals") +
+  theme_minimal()
+
+# Random Forest
+rf_model <- randomForest(ex ~ Age + Gender, data = train_data)
+rf_predictions <- predict(rf_model, newdata = test_data)
+rf_rmse <- sqrt(mean((test_data$ex - rf_predictions)^2))
+rf_r_squared <- cor(test_data$ex, rf_predictions)^2
+print(paste("Random Forest RMSE on Testing Data:", rf_rmse))
+print(paste("Random Forest R-squared on Testing Data:", rf_r_squared))
+
+# Visualize Variable Importance in Random Forest
+varImpPlot(rf_model, main = "Variable Importance in Random Forest")
+
+# Support Vector Machine
+svm_model <- svm(ex ~ Age + Gender, data = train_data)
+svm_predictions <- predict(svm_model, newdata = test_data)
+svm_rmse <- sqrt(mean((test_data$ex - svm_predictions)^2))
+svm_r_squared <- cor(test_data$ex, svm_predictions)^2
+print(paste("SVM RMSE on Testing Data:", svm_rmse))
+print(paste("SVM R-squared on Testing Data:", svm_r_squared))
+
+# Gradient Boosting
+gb_model <- gbm(ex ~ Age + Gender, data = train_data, distribution = "gaussian")
+gb_predictions <- predict(gb_model, newdata = test_data, n.trees = 100)  # Adjust the number of trees as needed
+gb_rmse <- sqrt(mean((test_data$ex - gb_predictions)^2))
+gb_r_squared <- cor(test_data$ex, gb_predictions)^2
+print(paste("Gradient Boosting RMSE on Testing Data:", gb_rmse))
+print(paste("Gradient Boosting R-squared on Testing Data:", gb_r_squared))
+
+# Visualize Residuals of Gradient Boosting
+ggplot(data = test_data, aes(x = Age, y = test_data$ex - gb_predictions)) +
+  geom_point() +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  labs(title = "Residuals of Gradient Boosting", x = "Age", y = "Residuals") +
+  theme_minimal()
+```
+
